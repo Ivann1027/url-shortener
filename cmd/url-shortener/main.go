@@ -33,6 +33,13 @@ func main() {
 		log.Error("failed to init storage", sl.Err(err))
 		os.Exit(1)
 	}
+
+	receivedUrl, err := storage.GetURL("google")
+	if err != nil {
+		log.Error("failed to get url by alias", sl.Err(err))
+		os.Exit(1)
+	}
+	log.Info("received url", slog.String("received url", receivedUrl))
 	_ = storage
 
 	// TODO: init router: chi, chi render

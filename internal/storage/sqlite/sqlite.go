@@ -3,8 +3,9 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"url-shortener/internal/storage"
 
-	_ "github.com/mattn/go-sqlite3" // init sqlite3 driver
+	_ "modernc.org/sqlite" // init sqlite driver
 )
 
 type Storage struct {
@@ -14,7 +15,7 @@ type Storage struct {
 func New(storagePath string) (*Storage, error) {
 	const fn = "storage.sqlite.New"
 	
-	db, err := sql.Open("sqlite3", storagePath)
+	db, err := sql.Open("sqlite", storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", fn, err)
 	}
@@ -35,6 +36,7 @@ func New(storagePath string) (*Storage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", fn, err)
 	}
+	defer stmt.Close()
 
 	_, err = stmt.Exec()
 	if err != nil {
@@ -42,4 +44,53 @@ func New(storagePath string) (*Storage, error) {
 	}
 
 	return &Storage{db: db}, nil
+}
+
+func (s *Storage) SaveURL(urlToSave, alias string) (int64, error) {
+	const fn = "storage.sqlite.SaveURL"
+
+	stmt, err := s.db.Prepare("INSERT INTO url(url, alias) VALUES(?, ?)")
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", fn, err)
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(urlToSave, alias)
+	if err != nil {
+		if driverErr, ok := err.(interface{ Number() int64 }); ok {
+			if driverErr.Number() == 2067 || driverErr.Number() == 19 { 
+				return 0, fmt.Errorf("%s: %w", fn, storage.ErrURLExists)
+			}
+		}
+
+		return 0, fmt.Errorf("%s: %w", fn, err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get last insert id: %w", fn, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) GetURL(alias string) (string, error) {
+	const fn = "storage.sqlite.GetURL"
+
+	stmt, err := s.db.Prepare("SELECT url FROM url WHERE alias = ?")
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", fn, err)
+	}
+	defer stmt.Close()
+
+	var receivedUrl string
+	err = stmt.QueryRow(alias).Scan(&receivedUrl)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("%s: %w", fn, storage.ErrURLNotFound)
+		}
+		return "", fmt.Errorf("%s: %w", fn, err)
+	}
+
+	return receivedUrl, nil
 }
