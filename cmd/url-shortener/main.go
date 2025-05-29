@@ -7,6 +7,9 @@ import (
 	"url-shortener/internal/config"
 	"url-shortener/internal/lib/logger/sl"
 	"url-shortener/internal/storage/sqlite"
+
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -33,16 +36,13 @@ func main() {
 		log.Error("failed to init storage", sl.Err(err))
 		os.Exit(1)
 	}
-
-	receivedUrl, err := storage.GetURL("google")
-	if err != nil {
-		log.Error("failed to get url by alias", sl.Err(err))
-		os.Exit(1)
-	}
-	log.Info("received url", slog.String("received url", receivedUrl))
 	_ = storage
 
 	// TODO: init router: chi, chi render
+	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.Logger)
 
 	// TODO: run server
 }
